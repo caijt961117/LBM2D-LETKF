@@ -1,0 +1,23 @@
+*.mp4
+*.dat
+*.png
+*.pdf
+core
+.ipynb_checkpoints
+__pycache__
+*.so
+.nfs*
+.DS_Store
+
+# wisteria
+*.*.stats
+.d0*
+
+# cpp/cuda
+*.o
+*.ptx
+*.a
+
+# by enable_EigenG-Bached.sh
+makefile.EigenG-Batched.in
+src/EigenG-Batched-*/
