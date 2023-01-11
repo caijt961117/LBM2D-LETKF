@@ -1,0 +1,14 @@
+#tag,sec
+_ignored,2.00852
+lbm2euler,0.0011673
+load_obs,0.263149
+mpi_barrier,0.167058
+mpi_xk,0.0168848
+mpi_xsol,0.186983
+mpi_yk,0.0672834
+pack_xk,0.0267534
+pack_yk,0.00443602
+set_yo,0.0186357
+solve,0.114747
+solve_comm_ovlp,0.807554
+update_xk,0.00275755

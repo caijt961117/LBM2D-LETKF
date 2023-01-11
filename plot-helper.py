@@ -17,7 +17,8 @@ def plot_all(prefix='io/nature/0', v='vor', cmap='coolwarm', dtype=np.float32):
     ny = 128
     nx = 128
     nout = 2000
-    nprocs = 1
+    nprocs = -1
+    nskip = 10
     plt.rcParams['figure.figsize'] = [3, 3]
 
     # cfd
@@ -47,7 +48,7 @@ def plot_all(prefix='io/nature/0', v='vor', cmap='coolwarm', dtype=np.float32):
             print(end='.', flush=True)
             
         import joblib
-        joblib.Parallel(n_jobs=20, verbose=1)(joblib.delayed(plot_t)(t) for t in range(nout))
+        joblib.Parallel(n_jobs=nprocs, verbose=1)(joblib.delayed(plot_t)(t) for t in range(0, nout, nskip))
 
     plot(v, cmap, clip=False)
         
