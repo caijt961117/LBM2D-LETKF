@@ -1,7 +1,4 @@
-*.mp4
-*.dat
-*.png
-*.pdf
+# tmp files
 core
 .ipynb_checkpoints
 __pycache__
