@@ -151,16 +151,13 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
 
 ```bibtex
 @inproceedings{Hasegawa2022-scalah22,
-    title = {{GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter}},
-    year = {2022},
-    booktitle = {ScalAH22: 13th Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems held in conjunction with SC22: The International Conference for High Performance Computing, Networking, Storage and Analysis (in press)},
-    author = {
-        Hasegawa, Yuta
-        and Imamura, Toshiyuki
-        and Ina, Takuya
-        and Onodera, Naoyuki
-        and Asahi, Yuuichi
-        and Idomura, Yasuhiro
-    }
+  author={Hasegawa, Yuta and Imamura, Toshiyuki and Ina, Takuya and Onodera, Naoyuki and Asahi, Yuuichi and Idomura, Yasuhiro},
+  booktitle={2022 IEEE/ACM Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems (ScalAH)}, 
+  title={GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter}, 
+  year={2022},
+  volume={},
+  number={},
+  pages={10-17},
+  doi={10.1109/ScalAH56622.2022.00007}
 }
 ```
