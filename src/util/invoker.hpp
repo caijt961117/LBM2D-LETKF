@@ -14,4 +14,3 @@ template<class Func, class... Args> __global__ void invoke_device(Func func, Arg
 }
 
 #endif
-

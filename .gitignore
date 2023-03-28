@@ -1,5 +1,6 @@
-# tmp files
+run/*.out
 core
+.local
 .ipynb_checkpoints
 __pycache__
 *.so

@@ -1,0 +1,33 @@
+.PHONY: test test_obs test_ly test_dummy test_nud test_letkf
+test: 
+	$(MAKE) test_obs
+	$(MAKE) test_ly
+	$(MAKE) test_dummy
+	$(MAKE) test_nud
+	$(MAKE) test_letkf
+
+obs_err := OBS_ERROR_RHO=0.03 OBS_ERROR_U=0.03
+test_obs:
+	@echo test building \'\'TEST=OBSERVE\'\' ...
+	@$(MAKE) clean > /dev/null
+	@$(MAKE) -j -k TEST=OBSERVE $(obs_err) > /dev/null && echo test passed || echo test failed
+
+test_ly:
+	@echo test building \'\'TEST=LYAPNOV\'\' ...
+	@$(MAKE) clean > /dev/null
+	@$(MAKE) -j -k TEST=LYAPNOV LY_EPSILON=1e-6 > /dev/null && echo test passed || echo test failed
+
+test_dummy:
+	@echo test building \'\'TEST=DA_DUMMY\'\' ...
+	@$(MAKE) clean > /dev/null
+	@$(MAKE) -j -k TEST=DA_DUMMY $(obs_err) > /dev/null && echo test passed || echo test failed
+
+test_nud:
+	@echo test building \'\'TEST=DA_NUDGING\'\' ...
+	@$(MAKE) clean > /dev/null
+	@$(MAKE) -j -k TEST=DA_NUDGING $(obs_err) > /dev/null && echo test passed || echo test failed
+
+test_letkf:
+	@echo test building \'\'TEST=DA_LETKF\'\' ...
+	@$(MAKE) clean > /dev/null
+	@$(MAKE) -j -k TEST=DA_LETKF $(obs_err) > /dev/null && echo test passed || echo test failed

@@ -151,6 +151,5 @@ int main(int argc, char** argv) try {
 
 } catch(std::runtime_error e) {
     std::cerr << e.what() << std::endl;
-    MPI_Finalize();
-    return 1;
+    MPI_Abort(MPI_COMM_WORLD, 1);
 }

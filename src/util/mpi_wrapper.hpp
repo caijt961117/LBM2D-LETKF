@@ -20,7 +20,7 @@ private:
 public:
     // setup
     mpi() = delete;
-    mpi(const MPI_Comm comm): comm_(comm) {
+    explicit mpi(const MPI_Comm comm): comm_(comm) {
         MPI_SAFE_CALL(MPI_Comm_rank(comm_, &rank_));
         MPI_SAFE_CALL(MPI_Comm_size(comm_, &size_));
     }
@@ -34,7 +34,7 @@ public:
     const auto& comm() const { return comm_; }
 
     // reduction
-    template<typename T> struct MPItypename { static constexpr MPI_Datatype name(); }; 
+    template<typename T> struct MPItypename { static constexpr MPI_Datatype name(); };
     template<typename T> T reduce_sum(T t) const { T ret = 0; MPI_Allreduce(&t, &ret, 1, MPItypename<T>::name(), MPI_SUM, comm_); return ret; }
     template<typename T> T reduce_max(T t) const { T ret = 0; MPI_Allreduce(&t, &ret, 1, MPItypename<T>::name(), MPI_MAX, comm_); return ret; }
     template<typename T> T reduce_min(T t) const { T ret = 0; MPI_Allreduce(&t, &ret, 1, MPItypename<T>::name(), MPI_MIN, comm_); return ret; }

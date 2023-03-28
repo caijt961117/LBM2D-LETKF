@@ -9,6 +9,7 @@
 #include "lbm.h"
 #include "data.h"
 #include "config.h"
+#include "util/stringutils.hpp"
 #include "util/mpi_safe_call.hpp"
 #include "util/cuda_safe_call.hpp"
 #include "util/invoker.hpp"
@@ -16,7 +17,11 @@
 
 #include "util/port.hpp"
 
-#define DEBUG_PRINT() //if (mpi.rank() == 0) { std::cout << "[D] " << __PRETTY_FUNCTION__ << ": " << __LINE__ << std::endl; }
+#ifdef DEBUG
+#define DEBUG_PRINT() if (mpi.rank() == 0) { std::cout << "[D] " << __PRETTY_FUNCTION__ << ": " << __LINE__ << std::endl; }
+#else
+#define DEBUG_PRINT() {}
+#endif
 
 #ifdef DA_LETKF
 
@@ -25,7 +30,7 @@ static constexpr auto xyprune = config::da_xyprune;
 static_assert(config::nx % xyprune == 0);
 static constexpr auto timeprune = config::daprune;
 static constexpr real beta = LETKF_COVINF; // covariance inflation factor
-static constexpr bool need_save_mat = false;
+static constexpr bool need_save_mat = true;
 
 static constexpr int n_batch0 = config::nx * config::ny;
 int n_batch_sp(const util::mpi& mpi) { runtime_assert(n_batch0 % mpi.size() == 0, "batch vs. mpi undivisable"); return n_batch0 / mpi.size(); }
@@ -37,49 +42,67 @@ static constexpr int no_per_grid = 3; // rho, u, v
 
 static constexpr int n_stt = ns_per_grid;
 
-static constexpr real d_local = xyprune==2 ? 1.5 : xyprune - 1; 
+#ifndef LETKF_RLOC_LEN
+static constexpr real d_local = xyprune - 1;
 static constexpr int n_obs_local = xyprune == 1 ? /* pointwise: */ 0 : /* r-localization c=p-1: */ 2;
 static constexpr int obs_offset  = xyprune == 1 ? /* pointwise: */ 0 : /* r-localization c=p-1: */ 1;
 static constexpr int n_obs_x     = xyprune == 1 ? /* pointwise: */ 1 : /* r-localization c=p-1: */ 4;
+#else
+static constexpr real d_local = LETKF_RLOC_LEN * xyprune;
+static constexpr int obs_offset = 0;
+static constexpr int n_obs_local = LETKF_RLOC_LEN * 2;
+static constexpr int n_obs_x = n_obs_local * 2 + 1;
+#endif
 static constexpr int n_obs = n_obs_x * n_obs_x * no_per_grid;
+
 
 void DataAssimilator::init_letkf(const util::mpi& mpi) {
     xk.reallocate(n_batch0 * n_stt);
-    xk_host.resize(n_batch0 * n_stt);
+    xk_host.reallocate(n_batch0 * n_stt);
     yk.reallocate(n_batch0 * n_obs);
 
+    constexpr int nxy = config::nx * config::ny;
+    uo.reallocate(nxy);
+    vo.reallocate(nxy);
+    ro.reallocate(nxy);
+    uo_host.resize(nxy);
+    vo_host.resize(nxy);
+    ro_host.resize(nxy);
     const int n_batch = n_batch_sp(mpi);
+    const int i_batch0 = i_batch_sp_begin(mpi);
+    runtime_assert(i_batch0 % config::nx == 0, "batch size per mpi should be divisable by nx");
     solver.init_geo(mpi.size(), n_stt, n_obs, n_batch);
     solver.set_rR(dim3(1, 1, n_batch), dim3(n_obs_x, n_obs_x),
-        [=] __device__ (real* e, int n_rows, int stride) {
-            // obs grid
-            const int i = threadIdx.x;
-            const int j = threadIdx.y;
-            const int ij = i + n_obs_x*j;
-            // indices of the batch (== cal grid)
-            const int b  = blockIdx.z;
-            const int ib = b % config::nx;
-            const int jb = b / config::nx;
+        [=] __device__ (letkf_real* e, int n_rows, int stride) {
+            // obs id
+            const int i_obs = threadIdx.x;
+            const int j_obs = threadIdx.y;
+            const int ij_obs = i_obs + n_obs_x*j_obs;
+            // grid offset by i_batch
+            const int i_batch  = blockIdx.z;
+            const int i0_stt = 0;
+            const int j0_stt = i_batch0 / config::nx;
+            // grid id
+            const int i_stt = i0_stt + i_batch % config::nx;
+            const int j_stt = j0_stt + i_batch / config::nx;
 
             // obs error cov
-            const int k = ij + ij*n_rows + b*stride;
+            const int k = ij_obs + ij_obs*n_rows + i_batch*stride;
             const int kofs = n_obs_x*n_obs_x + (n_obs_x*n_obs_x)*n_rows;
-            /// u
-            e[k] = powf(config::u_ref * config::obs_error, real(-2));
-            /// v
-            e[k + kofs] = powf(config::u_ref * config::obs_error, real(-2));
-            /// rho
-            e[k + 2*kofs] = powf(config::rho_ref * config::obs_error, real(-2));
+            e[k] = powf(config::obs_error_u, real(-2)); // u
+            e[k + kofs] = powf(config::obs_error_u, real(-2)); // v
+            e[k + 2*kofs] = powf(config::obs_error_rho, real(-2)); // rho
+
 
             // R-localization
             if(xyprune > 1) {
                 constexpr real cutoff = d_local + 1e-6;
-                const int io = (int(ib/xyprune) + i - (n_obs_local-obs_offset))*xyprune;
-                const int jo = (int(jb/xyprune) + j - (n_obs_local-obs_offset))*xyprune;
-                const real di = ib - io;
-                const real dj = jb - jo;
+                const int io_stt = (int(i_stt/xyprune) + i_obs - (n_obs_local-obs_offset))*xyprune;
+                const int jo_stt = (int(j_stt/xyprune) + j_obs - (n_obs_local-obs_offset))*xyprune;
+                const real di = i_stt - io_stt;
+                const real dj = j_stt - jo_stt;
                 const real d = sqrtf(di*di + dj*dj) / cutoff;
-                const real gaspari_cohn = 
+                const real gaspari_cohn =
                     (d <= 0) ? 1:
                     (d <= 1) ? -d*d*d*d*d/4. + d*d*d*d/2. + d*d*d*5./8. - d*d*5./3. + 1:
                     (d <= 2) ? d*d*d*d*d/12. - d*d*d*d/2. + d*d*d*5./8. + d*d*5./3. - d*5 + 4 - 2./3./d:
@@ -104,12 +127,9 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
     const auto* rho = dat.d().r.data();
     const auto* u = dat.d().u.data();
     const auto* v = dat.d().v.data();
-    auto* ro = this->obse.data();
-    auto* uo = this->obse.data() + config::nx * config::ny;
-    auto* vo = this->obse.data() + 2*config::nx * config::ny;
     MPI_Request mpi_requests[4]; // load_obs[3]+yk[1], xk[1]
 
-
+    DEBUG_PRINT();
     timer.transit("pack_xk");
     auto* xk = this->xk.ptr();
     util::invoke_device<<< dim3(config::ny, config::Q), config::nx >>>(
@@ -122,8 +142,9 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
         }
     );
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(xk_host.data(), xk, xk_host.size()*sizeof(real), cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(xk_host.ptr(), xk, xk_host.size()*sizeof(letkf_real), cudaMemcpyDeviceToHost));
 
+    DEBUG_PRINT();
     timer.transit("pack_yk");
     auto* yk = this->yk.ptr();
     util::invoke_device<<< dim3(config::ny, config::nx), dim3(n_obs_x, n_obs_x) >>>(
@@ -165,45 +186,56 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
         }
     );
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    DEBUG_PRINT();
     timer.transit("mpi_yk");
     solver.mpi_ialltoall_yk(mpi.comm(), &mpi_requests[3], yk);
 
     // comm overlap: load_obs@master&MPI_Ibcast(obse), MPI_Alltoall(yk)
+    DEBUG_PRINT();
     timer.transit("load_obs");
+    MPI_Datatype MPI_REAL_ = util::mpi::MPItypename<real>::name();
     if(mpi.rank() == 0) { /// load observation r
-        const auto fname = "io/observed/0/rho_" + std::to_string(step) + ".dat";
+        const auto fname = "io/observed/ens0000/rho_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
         runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
-        file.read(reinterpret_cast<char*>(ro), sizeof(real) * config::nx * config::ny);
+        file.read(reinterpret_cast<char*>(ro_host.data()), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(ro.ptr(), ro_host.data(), sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
     }
-    MPI_Ibcast(ro, /* cnt= */config::nx*config::ny, MPI_FLOAT, /* root= */0, mpi.comm(), &mpi_requests[0]);
+    MPI_Ibcast(ro.ptr(), /* cnt= */config::nx*config::ny, MPI_REAL_, /* root= */0, mpi.comm(), &mpi_requests[0]);
     if(mpi.rank() == 0) { /// load observation u
-        const auto fname = "io/observed/0/u_" + std::to_string(step) + ".dat";
+        const auto fname = "io/observed/ens0000/u_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
         runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
-        file.read(reinterpret_cast<char*>(uo), sizeof(real) * config::nx * config::ny);
+        file.read(reinterpret_cast<char*>(uo_host.data()), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(uo.ptr(), uo_host.data(), sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
     }
-    MPI_Ibcast(uo, /* cnt= */config::nx*config::ny, MPI_FLOAT, /* root= */0, mpi.comm(), &mpi_requests[1]);
+    MPI_Ibcast(uo.ptr(), /* cnt= */config::nx*config::ny, MPI_REAL_, /* root= */0, mpi.comm(), &mpi_requests[1]);
     if(mpi.rank() == 0) { /// load observation v
-        const auto fname = "io/observed/0/v_" + std::to_string(step) + ".dat";
+        const auto fname = "io/observed/ens0000/v_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
         runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
-        file.read(reinterpret_cast<char*>(vo), sizeof(real) * config::nx * config::ny);
+        file.read(reinterpret_cast<char*>(vo_host.data()), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(vo.ptr(), vo_host.data(), sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
     }
-    MPI_Ibcast(vo, /* cnt= */config::nx*config::ny, MPI_FLOAT, /* root= */0, mpi.comm(), &mpi_requests[2]);
+    MPI_Ibcast(vo.ptr(), /* cnt= */config::nx*config::ny, MPI_REAL_, /* root= */0, mpi.comm(), &mpi_requests[2]);
     MPI_Waitall(4, mpi_requests, MPI_STATUSES_IGNORE);
     mpi.barrier();
 
     // finalize yk after comm
+    DEBUG_PRINT();
     timer.transit("pack_yk");
     solver.reorder_yk_after_ialltoall();
 
+    DEBUG_PRINT();
     timer.transit("set_yo");
     runtime_assert(config::ny % mpi.size() == 0, "grid number vs. mpi is undivisible");
+    const auto* uo = this->uo.ptr();
+    const auto* vo = this->vo.ptr();
+    const auto* ro = this->ro.ptr();
     const int yo_n_batch_y = config::ny / mpi.size();
     const int yo_j_batch_offset = i_batch_sp_begin(mpi) / config::nx;
     solver.set_yo(0, dim3(config::nx, yo_n_batch_y), dim3(n_obs_x, n_obs_x),
-        [=] __device__ (float* yo, size_t stride) {
+        [=] __device__ (letkf_real* yo, size_t stride) {
             // indices of the rows in the batch
             const int ir = threadIdx.x;
             const int jr = threadIdx.y;
@@ -236,12 +268,14 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
         } // [=] __device__
     ); // solver.ser_yo
 
+    DEBUG_PRINT();
     timer.transit("mpi_xk");
-    solver.mpi_ialltoall_xk_host(mpi.comm(), &mpi_requests[0], xk_host.data());
+    solver.mpi_ialltoall_xk_host(mpi.comm(), &mpi_requests[0], xk_host.ptr());
 
     { /// solver part with overlapped communication of mpi_ialltoall_xk
+        DEBUG_PRINT();
         timer.transit("solve_comm_ovlp");
-        std::string mat_save_prefix = 
+        std::string mat_save_prefix =
             need_save_mat
             ? config::prefix + "/letkf/mat/ens" + std::to_string(mpi.rank())
             : "";
@@ -253,15 +287,18 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
     timer.transit("mpi_barrier");
     mpi.barrier();
     #endif
+    DEBUG_PRINT();
     timer.transit("mpi_xk");
     MPI_Wait(&mpi_requests[0], MPI_STATUSES_IGNORE);
+    DEBUG_PRINT();
     timer.transit("pack_xk");
     solver.copy_xk_host_to_device();
     solver.reorder_xk_after_ialltoall();
 
     { /// non overlapped solver part
+        DEBUG_PRINT();
         timer.transit("solve");
-        std::string mat_save_prefix = 
+        std::string mat_save_prefix =
             need_save_mat
             ? config::prefix + "/letkf/mat/ens" + std::to_string(mpi.rank())
             : "";
@@ -273,17 +310,19 @@ void DataAssimilator::assimilate_letkf_uv(data& dat, const util::mpi& mpi, const
     timer.transit("mpi_barrier");
     mpi.barrier();
     #endif
+    DEBUG_PRINT();
     timer.transit("mpi_xsol");
     solver.mpi_alltoall_Xsol(mpi.comm());
 
     // update f by LETKF sol
+    DEBUG_PRINT();
     timer.transit("update_xk");
     auto* fn = dat.dn().f.data();
     solver.update_xk(
         0, // id of ens (dummy)
         0, // i_batch_0
         dim3(config::ny, config::Q), config::nx,
-        [=] __device__ (const float* Xk, size_t stride) {
+        [=] __device__ (const letkf_real* Xk, size_t stride) {
             const auto i = threadIdx.x + blockDim.x * blockIdx.x;
             const auto q = blockIdx.y;
             const auto idx_lbm = config::ijq(i, q);

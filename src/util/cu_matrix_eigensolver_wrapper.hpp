@@ -15,8 +15,14 @@ namespace cu_matrix {
 #ifdef USE_EIGENG_BATCHED
 
 // EigenG wrapper for eigenvalue decomposition ()
-//template<class T=float>
+template<class T>
 class eigensolver_wrapper {
+public:
+    using real = T;
+    using vector = vector_x<real>;
+    using matrix = matrix_x<real>;
+
+private:
     bool is_initialized_ = false;
     bool accuracy_test = false;
 
@@ -25,9 +31,9 @@ class eigensolver_wrapper {
     int n_  = 0;
     int m_  = 0;
     cudaStream_t stream_;
-    device_memory<float> workspace_;
+    device_memory<real> workspace_;
 
-    public:
+public:
     eigensolver_wrapper() {  }
     ~eigensolver_wrapper(){ cudaStreamDestroy( stream_ ); }
 
@@ -48,7 +54,7 @@ class eigensolver_wrapper {
                 vec.mem().ptr(),
                 &worksize);
         cudaDeviceSynchronize();
-        worksize = ( worksize / sizeof(float) ) + 1;
+        worksize = ( worksize / sizeof(real) ) + 1;
         workspace_.reallocate(worksize);
         cudaStreamCreate( &stream_ );
         is_initialized_ = true;
@@ -67,21 +73,123 @@ class eigensolver_wrapper {
                 workspace_.ptr(),
                 stream_);
         cudaDeviceSynchronize();
-    } 
+    }
 };
 
 #else
 
+namespace cusolverDn_api_wrapper__ {
+    template<typename T> inline cusolverStatus_t
+    syevjBatched_bufferSize(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        const T* A,
+        int lda,
+        const T* W,
+        int* lwork,
+        syevjInfo_t params,
+        int batchSize
+    );
+    template<> inline cusolverStatus_t
+    syevjBatched_bufferSize(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        const float* a,
+        int lda,
+        const float* w,
+        int* lwork,
+        syevjInfo_t params,
+        int batchSize
+    ) {
+        return cusolverDnSsyevjBatched_bufferSize(handle, jobz, uplo, n, a, lda, w, lwork, params, batchSize);
+    }
+    template<> inline cusolverStatus_t
+    syevjBatched_bufferSize(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        const double* a,
+        int lda,
+        const double* w,
+        int* lwork,
+        syevjInfo_t params,
+        int batchSize
+    ) {
+        return cusolverDnDsyevjBatched_bufferSize(handle, jobz, uplo, n, a, lda, w, lwork, params, batchSize);
+    }
+    template<typename T> inline cusolverStatus_t
+    syevjBatched(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        T* A,
+        int lda,
+        T* W,
+        T* work,
+        int lwork,
+        int* info,
+        syevjInfo_t params,
+        int batchSize
+    );
+    template<> inline cusolverStatus_t
+    syevjBatched(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        float* A,
+        int lda,
+        float* W,
+        float* work,
+        int lwork,
+        int* info,
+        syevjInfo_t params,
+        int batchSize
+    ) {
+        return cusolverDnSsyevjBatched(handle, jobz, uplo, n, A, lda, W, work, lwork, info, params, batchSize);
+    }
+    template<> inline cusolverStatus_t
+    syevjBatched(
+        cusolverDnHandle_t handle,
+        cusolverEigMode_t jobz,
+        cublasFillMode_t uplo,
+        int n,
+        double* A,
+        int lda,
+        double* W,
+        double* work,
+        int lwork,
+        int* info,
+        syevjInfo_t params,
+        int batchSize
+    ) {
+        return cusolverDnDsyevjBatched(handle, jobz, uplo, n, A, lda, W, work, lwork, info, params, batchSize);
+    }
+}
+
 // cusolverDn wrapper for eigenvalue decomposition (Jacobi method, batched)
+template<typename T>
 class eigensolver_wrapper {
+public:
+    using real = T;
+    using vector = vector_x<real>;
+    using matrix = matrix_x<real>;
+
+private:
     cusolverDnHandle_t handle_;
     syevjInfo_t params_;
-    device_memory<float> workspace_;
+    device_memory<real> workspace_;
     device_memory<int> info_;
     bool is_initialized_ = false;
 
     // Jacobi params
-    static constexpr float eps = 1e-6;
+    static constexpr real eps = 1e-6;
     static constexpr int max_sweeps = 100;
 
 public:
@@ -97,7 +205,7 @@ public:
 
         // workspace
         int worksize=0;
-        CUSOLVER_SAFE_CALL(cusolverDnSsyevjBatched_bufferSize(
+        CUSOLVER_SAFE_CALL(cusolverDn_api_wrapper__::syevjBatched_bufferSize(
                     handle_,
                     CUSOLVER_EIG_MODE_VECTOR,
                     CUBLAS_FILL_MODE_LOWER,
@@ -114,7 +222,7 @@ public:
 
    void solve(matrix& mat, vector& vec) {
         if(!is_initialized_) { init(mat, vec); }
-        auto status = cusolverDnSsyevjBatched(
+        auto status = cusolverDn_api_wrapper__::syevjBatched(
                 handle_,
                 CUSOLVER_EIG_MODE_VECTOR,
                 CUBLAS_FILL_MODE_LOWER,
@@ -133,4 +241,4 @@ public:
 
 }} // namespace
 
-#endif
+#endif // UTIL_CU_MATRIX_EIGENSOLVER_WRAPPER_HPP_

@@ -61,7 +61,7 @@ void stdata::init_lbm(int ensemble_id_orig) {
             const auto kij = ki + nk * kj;
             const auto k = std::sqrt(real(ki*ki + kj*kj));
             //const auto pk = k*k*std:0.1:exp(-k*k/2.); /// non-forced
-            const auto pk = (k0-dk <= k and k <= k0+dk) 
+            const auto pk = (k0-dk <= k and k <= k0+dk)
                 ? std::exp( - (k-k0)*(k-k0) / sigma )
                 : 0; /// forced maltrud91
             //const auto pk = ((ki == k0 or kj == k0) and ki <= k0 and kj <= k0)
@@ -164,13 +164,14 @@ void stdata::init_forces(int ensemble_id) {
     force_amp.clear();
 
     // initilize spectrum of force
+    constexpr int max_search_nmode = 10000;
     constexpr real kf = config::kf;
-    constexpr real amp_scale = 3; // amp scaling (tuned along with kf)
+    constexpr real amp_scale = config::fkf;
     constexpr real sigma = 1; // gaussian stdev
     constexpr real dk = 2; // clipping width
-    constexpr int kmax = config::nx / 2;
+    constexpr int kmax_search = int(kf+dk);
     long double asum = 0;
-    for(int ky=0; ky<kmax; ky++) { for(int kx=0; kx<kmax; kx++) {
+    for(int ky=0; ky<kmax_search; ky++) { for(int kx=0; kx<kmax_search; kx++) {
         if(kx == 0 and ky == 0) { continue; }
         const auto k = std::sqrt(ky*ky + kx*kx);
         if(kf-dk <= k and k <= kf+dk) {  /// maltrud91
@@ -182,9 +183,33 @@ void stdata::init_forces(int ensemble_id) {
             force_kx.push_back(kx);
             force_ky.push_back(ky);
             force_amp.push_back(amp);
-            if(ensemble_id == 0) { std::cout << "forces wavenumber: " << k << " (" << kx << ", " << ky << ")" << std::endl; }
+            //if(ensemble_id == 0) { std::cout << "forces wavenumber: " << k << " (" << kx << ", " << ky << ")" << std::endl; }
         }
+        if(force_kx.size() >= max_search_nmode) { break; }
     }}
+
+    // prune modes of force
+    constexpr size_t max_nmode = 100;
+    if(force_kx.size() > max_nmode) {
+        auto tmp_kx = force_kx;
+        auto tmp_ky = force_ky;
+        auto tmp_am = force_amp;
+        std::vector<int> ps(max_nmode);
+        std::mt19937 engine(force_kx.size());
+        for(auto& p: ps) {
+            std::uniform_int_distribution<int> dist(0, max_nmode);
+            p = dist(engine);
+        }
+
+        force_kx.clear();
+        force_ky.clear();
+        force_amp.clear();
+        for(auto p: ps) {
+            force_kx.push_back(tmp_kx.at(p));
+            force_ky.push_back(tmp_ky.at(p));
+            force_amp.push_back(tmp_am.at(p));
+        }
+    }
 
     if(config::verbose >= 1 && ensemble_id == 0) {
         std::cout << "force: " << "n=" << int(force_kx.size()) << ", sum=" << asum << std::endl;
@@ -431,7 +456,7 @@ void stdata::purturbulate(int ensemble_id) {
 }
 
 void stdata::inspect() const {
-    if(config::verbose >= 10) {
+    if(config::verbose >= 100) {
         std::cout << "stdata:: " << std::endl;
         std::cout << "  u: " << *std::min_element(u.begin(), u.end())  << " " << *std::max_element(u.begin(), u.end()) << std::endl;
         std::cout << "  v: " << *std::min_element(v.begin(), v.end())  << " " << *std::max_element(v.begin(), v.end()) << std::endl;
@@ -439,7 +464,7 @@ void stdata::inspect() const {
         std::cout << "  nus: " << *std::min_element(nus.begin(), nus.end())  << " " << *std::max_element(nus.begin(), nus.end()) << std::endl;
     }
 
-    if(config::verbose >= 12) {
+    if(config::verbose >= 10) {
         std::cout << std::scientific << std::setprecision(16) << std::flush;
         real momentum_x_total = 0, momentum_y_total = 0;
         real energy = 0;
@@ -496,18 +521,20 @@ void stdata::inspect() const {
         enstrophy        /= (config::nx * config::ny);
         nus_total        /= (config::nx * config::ny);
         mass             /= (config::nx * config::ny);
-        divu2 = std::sqrt(divu2 / config::nx / config::ny);
+        divu2            /= (config::nx * config::ny);
         divu             /= (config::nx * config::ny);
         vel2             /= (config::nx * config::ny);
-        
+
         //std::cout << " mean mx: " << momentum_x_total << " [kg m/s]" << std::endl;
         //std::cout << " mean my: " << momentum_y_total << " [kg m/s]" << std::endl;
-        std::cout << " mean, max speed: " << std::sqrt(vel2) << ", " << std::sqrt(maxvel2) << " [m/s]" << std::endl;
-        std::cout << " mean energy: " << energy << " [m2/s2]" << std::endl;
-        std::cout << " mean enstrophy: " << enstrophy << " [/s2]" << std::endl;
+        std::cout << " RMS, max speed: " << std::sqrt(vel2) << ", " << std::sqrt(maxvel2) << " [m/s]" << std::endl;
+        //std::cout << " mean energy: " << energy << " [m2/s2]" << std::endl;
+        //std::cout << " mean enstrophy: " << enstrophy << " [/s2]" << std::endl;
         std::cout << " mean les visc: " << nus_total << " [m2/s]" << std::endl;
         std::cout << " mean mass: " << mass << " [kg]" << std::endl;
+        std::cout << " delta_rho: " << *std::max_element(r.begin(), r.end()) - *std::min_element(r.begin(), r.end()) << " [kg/m3]" << std::endl;
         std::cout << " max vel divergence (times dx, devided by uref): " << maxdivu * config::dx / config::u_ref << " []" << std::endl;
+
 
         std::cout << std::resetiosflags(std::ios_base::floatfield);
         std::cout << std::endl;

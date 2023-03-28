@@ -8,4 +8,3 @@ inline void unit() {
 }
 
 #endif
-
