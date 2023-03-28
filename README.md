@@ -4,7 +4,7 @@
 
 `LBM2D-LETKF` is a microbenchmark code for ensemble data assimilation of turbulent flow using 2D lattice Boltzmann method (LBM) and local ensemble transform Kalman filter (LETKF).
 Computation is fully implemented in NVIDA GPU by using CUDA.
-Problem size of the test is typically 128 x 128 grid points with {4,16,64} ensembles, where the required number of GPUs is equal to the ensemble size (4, 16, or 64 GPUs).
+Problem size of the test is typically 256 x 256 grid points with {4,16,64} ensembles, where the required number of GPUs is equal to the ensemble size (4, 16, or 64 GPUs).
 
 This microbenchmark code has been develped to test the capability of ensemble data assimilation to `CityLBM`;
 `CityLBM` is an application for real-time high-resolution simulation of urban wind flow and plume dispersion. 
@@ -18,7 +18,7 @@ Differences between `CityLBM` and this benchmark are summarized as following:
 | problem | realistic problem of wind flow and plume dispersion in urban areas with high-rise buildings | virtually configured (non-realistic) isotropic turbulence |
 | mesh type | locally refined mesh (AMR) | uniform mesh |
 | mesh size | > O(10^8) | O(10^4) |
-| numerical model for velocity | LBM<br>cumulant collision [[Geier2015]](https://doi.org/10.1016/j.camwa.2015.05.001)<br>CSM-LES [[Kobayashi2005]](https://doi.org/10.1063/1.1874212) | LBM<br>standard BGK collision<br>CSM-LES |
+| numerical model for velocity | LBM<br>cumulant collision [[Geier2015]](https://doi.org/10.1016/j.camwa.2015.05.001)<br>CSM-LES [[Kobayashi2005]](https://doi.org/10.1063/1.1874212) | LBM<br>standard BGK collision<br>standard Smagorinsky model |
 | numerical model for temperature | Boussinesq approximation with finite difference discritization | *None* |
 | numerical model for plume dispersion | passible scalar with finite volume discritization | *None* |
 | implement of LEKTF | *not yet* | yes |
@@ -42,7 +42,7 @@ Firstly, the following external libraries are required:
 
 To use `EigenG-Batched`, execute
 ```
-./enable_EigenG-Batched.sh
+./config/enable_EigenG-Batched.sh
 ```
 
 ### Compile
@@ -67,7 +67,7 @@ After compilation is succeeded, the executable named `run/a.out` is generated.
 
 ### Run
 
-#### (1) validation test
+#### (1) short validation test
 
 To check the validity of the data assimilation, one may test the Observing System Simulation Experiment (OSSE) of LBM2D-LETKF.
 The OSSE calculation is done by the following steps:
@@ -79,26 +79,28 @@ The OSSE calculation is done by the following steps:
    mpiexec <mpiexec_options...> -np 1 run/a.out
    ```
    \*\* note: `mpiexec_options` depend on environments. For details, please refer sample job scripts, [`run/wistimer`](run/wistimer) (for Wisteria-A) or [`run/jstimer`](run/jstimer) (for HPE SGI8600).
-1. Compute data assimilation:
+2. Compute data assimilation:
    ```
    make clean
    make TEST=DA_LETKF
    mpiexec <mpiexec_options...> -np <ensemble_size> run/a.out
    ```
    \*\* note: `ensemble_size` is, e.g. 4, 16, or 64
-1. Visualize the result; this will generate the snapshots of contour of vorticity field in nature run, observation, and LETKF:
+3. Visualize the result; this will generate the snapshots of contour of vorticity field in nature run, observation, and LETKF:
    ```
-   ./plot-helper.py
+   ./postprocess/plot-vorticity.py io/*/ens*/
    ```
    
 After 3., you may find the snapshots named `io/*/0/vor_1990.png` (example is shown below).
 The result of the LETKF is expected to be similar to the Nature run; otherwise the validation test has been failed. 
 
-| Nature run | Observation | LETKF (expected) | LETKF (invalid) |
+| Nature run | Observation | LETKF (expected) | Non-DA or invalid LETKF |
 |:--|:--|:--|:--|
-| <img width=200 src=doc/osse/nature_vor_1990.png /><br>`io/nature/0/vor_1990.png` | <img width=200 src=doc/osse/observed_vor_1990.png /><br>`io/observed/0/vor_1990.png` | <img width=200 src=doc/osse/letkf_vor_1990.png><br>`io/calc/0/vor_1990.png` | <img width=200 src=doc/osse/nonda_vor_1990.png><br>`io/calc/0/vor_1990.png` | 
+| <img width=160 src=doc/nature_vor_step0000002000.png> | <img width=160 src=doc/observed_vor_step0000002000.png> | <img width=160 src=doc/letkf_vor_step0000002000.png> | <img width=160 src=doc/noda_vor_step0000002000.png> | 
 
 #### (2) performance evaluation
+
+*OUT OF DATE. Below result is with 128 x 128 mesh.*
 
 The validation test also measures the performance, hence additional computation is not needed.
 You may find the performance result in `io/elapsed_time_rank*.csv` and `io/letkf_elapsed_time_rank*.csv`.
@@ -147,17 +149,29 @@ The result is, for instance,
 
 Besides, examples of performance evaluations at Wisteria-A can be found in [doc/result_example/aquarius](doc/result_example/aquarius).
 
+
+## Release version at each published article
+
+- [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/culb2d/releases/tag/v2.4.4)
+
+- `PRF2023 (submitted)`: [`v3.0.3`](https://github.com/hasegawa-yuta-jaea/culb2d/releases/tag/v3.0.3)
+
 ## Citation
 
 ```bibtex
-@inproceedings{Hasegawa2022-scalah22,
-  author={Hasegawa, Yuta and Imamura, Toshiyuki and Ina, Takuya and Onodera, Naoyuki and Asahi, Yuuichi and Idomura, Yasuhiro},
-  booktitle={2022 IEEE/ACM Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems (ScalAH)}, 
-  title={GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter}, 
-  year={2022},
-  volume={},
-  number={},
-  pages={10-17},
-  doi={10.1109/ScalAH56622.2022.00007}
-}
+@inproceedings{Hasegawa2022-ScalAH22,
+   author={Hasegawa, Yuta and Imamura, Toshiyuki and Ina, Takuya and Onodera, Naoyuki and Asahi, Yuuichi and Idomura, Yasuhiro},
+   booktitle={2022 IEEE/ACM Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems (ScalAH)}, 
+   title={GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter}, 
+   year={2022},
+   volume={},
+   number={},
+   pages={10-17},
+   doi={10.1109/ScalAH56622.2022.00007}
+ }
+ @article{Hasegawa2023-PRF,
+    author={Hasegawa, Yuta and Onodera, Naoyuki and Asahi, Yuuichi and Ina, Takuya and Idomura, Yasuhiro and Imamura, Toshiyuki},
+    journal={submitted to Physical Review Fluids},
+    title={A minimal benchmark for continuous data assimilation of two-dimensional turbulence by using lattice Boltzmann method and local ensemble transform Kalman filter}
+ }
 ```

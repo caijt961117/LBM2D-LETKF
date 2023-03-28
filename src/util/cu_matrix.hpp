@@ -349,10 +349,5 @@ public: // batched operations w/ reduction //
 
 };
 
-// assume fp32
-using vector = vector_x<float>;
-using matrix = matrix_x<float>;
-using scalar = scalar_x<float>;
-
 }} // namespace
 #endif

@@ -9,8 +9,93 @@
 namespace util {
 namespace cu_matrix {
 
-//
+namespace cublas_api_wrapper__ {
+    template<typename T> inline cublasStatus_t
+    copy(cublasHandle_t handle, int n, const T* x, int incx, T* y, int incy);
+    template<> inline cublasStatus_t
+    copy(cublasHandle_t handle, int n, const float* x, int incx, float* y, int incy) {
+        return cublasScopy(handle, n, x, incx, y, incy);
+    }
+    template<> inline cublasStatus_t
+    copy(cublasHandle_t handle, int n, const double* x, int incx, double* y, int incy) {
+        return cublasDcopy(handle, n, x, incx, y, incy);
+    }
+
+    template<typename T> inline cublasStatus_t
+    axpy(cublasHandle_t handle, int n, const T* alpha, const T* x, int incx, T* y, int incy);
+    template<> inline cublasStatus_t
+    axpy(cublasHandle_t handle, int n, const float* alpha, const float* x, int incx, float* y, int incy) {
+        return cublasSaxpy(handle, n, alpha, x, incx, y, incy);
+    }
+    template<> inline cublasStatus_t
+    axpy(cublasHandle_t handle, int n, const double* alpha, const double* x, int incx, double* y, int incy) {
+        return cublasDaxpy(handle, n, alpha, x, incx, y, incy);
+    }
+
+    template<typename T> inline cublasStatus_t
+    nrm2(cublasHandle_t handle, int n, const T* x, int incx, T* result);
+    template<> inline cublasStatus_t
+    nrm2(cublasHandle_t handle, int n, const float* x, int incx, float* result) {
+        return cublasSnrm2(handle, n, x, incx, result);
+    }
+    template<> inline cublasStatus_t
+    nrm2(cublasHandle_t handle, int n, const double* x, int incx, double* result) {
+        return cublasDnrm2(handle, n, x, incx, result);
+    }
+
+    template<typename T> inline cublasStatus_t
+    gemmStridedBatched(
+        cublasHandle_t handle,
+        cublasOperation_t transa,
+        cublasOperation_t transb,
+        int m, int n, int k,
+        const T* alpha,
+        const T* A, int lda, long long int strideA,
+        const T* B, int ldb, long long int strideB,
+        const T* beta,
+        T* C, int ldc, long long int strideC,
+        int batchCount
+    );
+    template<> inline cublasStatus_t
+    gemmStridedBatched(
+        cublasHandle_t handle,
+        cublasOperation_t transa,
+        cublasOperation_t transb,
+        int m, int n, int k,
+        const float* alpha,
+        const float* A, int lda, long long int strideA,
+        const float* B, int ldb, long long int strideB,
+        const float* beta,
+        float* C, int ldc, long long int strideC,
+        int batchCount
+    ) {
+        return cublasSgemmStridedBatched(handle, transa, transb, m, n, k, alpha, A, lda, strideA, B, ldb, strideB, beta, C, ldc, strideC, batchCount);
+    }
+    template<> inline cublasStatus_t
+    gemmStridedBatched(
+        cublasHandle_t handle,
+        cublasOperation_t transa,
+        cublasOperation_t transb,
+        int m, int n, int k,
+        const double* alpha,
+        const double* A, int lda, long long int strideA,
+        const double* B, int ldb, long long int strideB,
+        const double* beta,
+        double* C, int ldc, long long int strideC,
+        int batchCount
+    ) {
+        return cublasDgemmStridedBatched(handle, transa, transb, m, n, k, alpha, A, lda, strideA, B, ldb, strideB, beta, C, ldc, strideC, batchCount);
+    }
+}
+
+template<typename T>
 class cublas_wrapper {
+public:
+    using real = T;
+    using vector = vector_x<real>;
+    using matrix = matrix_x<real>;
+
+private:
     cublasHandle_t handle_;
 
 public:
@@ -22,7 +107,7 @@ public:
         runtime_assert(x.n() == y.n(), "vector size mismatch");
         runtime_assert(x.stride() == y.stride(), "vector size mismatch");
         runtime_assert(x.n_batch() == y.n_batch(), "batch size mismatch");
-        CUBLAS_SAFE_CALL(cublasScopy(
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::copy(
             handle_,
             x.stride() * x.n_batch(),
             x.ptr(), 1,
@@ -34,7 +119,7 @@ public:
         runtime_assert(x.n_cols() == y.n_cols(), "matrix size mismatch");
         runtime_assert(x.stride() == y.stride(), "matrix size mismatch");
         runtime_assert(x.n_batch() == y.n_batch(), "batch size mismatch");
-        CUBLAS_SAFE_CALL(cublasScopy(
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::copy(
             handle_,
             x.stride() * x.n_batch(),
             x.ptr(), 1,
@@ -43,11 +128,11 @@ public:
     }
 
     // axpy wrapper;; y = a*x + y
-    void axpy(float alpha, const vector& x, vector& y) {
+    void axpy(real alpha, const vector& x, vector& y) {
         runtime_assert(x.n() == y.n(), "vector size mismatch");
         runtime_assert(x.stride() == y.stride(), "vector size mismatch");
         runtime_assert(x.n_batch() == y.n_batch(), "batch size mismatch");
-        CUBLAS_SAFE_CALL(cublasSaxpy(
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::axpy(
             handle_,
             x.stride() * x.n_batch(),
             &alpha,
@@ -57,8 +142,8 @@ public:
     }
 
     // nrm2 wrapper;; a = L2norm(x)
-    void nrm2(const vector& x, float* a) {
-        CUBLAS_SAFE_CALL(cublasSnrm2(
+    void nrm2(const vector& x, real* a) {
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::nrm2(
             handle_,
             x.stride() * x.n_batch(),
             x.ptr(), 1,
@@ -67,8 +152,8 @@ public:
     }
 
     // nrm2 wrapper;; result = L2norm(matA)
-    void nrm2(const matrix& matA, float* result) {
-        CUBLAS_SAFE_CALL(cublasSnrm2(
+    void nrm2(const matrix& matA, real* result) {
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::nrm2(
             handle_,
             matA.stride() * matA.n_batch(),
             matA.ptr(), 1,
@@ -84,8 +169,8 @@ public:
             const matrix& matB,
             cublasOperation_t transa=CUBLAS_OP_N,
             cublasOperation_t transb=CUBLAS_OP_N,
-            float alpha=1,
-            float beta=0
+            real alpha=1,
+            real beta=0
     ) {
         const auto Cm = matC.n_rows();
         const auto Am = (transa == CUBLAS_OP_N ? matA.n_rows() : matA.n_cols());
@@ -96,7 +181,7 @@ public:
         const auto Ak = (transa == CUBLAS_OP_N ? matA.n_cols() : matA.n_rows());
         const auto Bk = (transb == CUBLAS_OP_N ? matB.n_rows() : matB.n_cols());
         runtime_assert(Ak == Bk, "matrix size mismatch: k: reduction");
-        CUBLAS_SAFE_CALL(cublasSgemmStridedBatched(
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::gemmStridedBatched(
                     handle_,
                     transa, transb,
                     Cm, Cn, Ak,
@@ -115,8 +200,8 @@ public:
             const matrix& matA,
             const vector& vecx,
             cublasOperation_t transa=CUBLAS_OP_N,
-            float alpha=1,
-            float beta=0
+            real alpha=1,
+            real beta=0
     ) {
         const auto yn = vecy.n();
         const auto An = (transa == CUBLAS_OP_N ? matA.n_rows() : matA.n_cols());
@@ -124,7 +209,7 @@ public:
         const auto xk = vecx.n();
         const auto Ak = (transa == CUBLAS_OP_N ? matA.n_cols() : matA.n_rows());
         runtime_assert(xk == Ak, "matrix-vector size mismatch: k: reduction");
-        CUBLAS_SAFE_CALL(cublasSgemmStridedBatched(
+        CUBLAS_SAFE_CALL(cublas_api_wrapper__::gemmStridedBatched(
                     handle_,
                     transa, CUBLAS_OP_N,
                     yn, 1, Ak,

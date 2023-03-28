@@ -3,9 +3,9 @@
 # support intel/gnu C++; OpenMP; OpenMPI
 ############################################################
 
-include makefile.compiler.in
-include makefile.macro.in
--include makefile.EigenG-Batched.in
+include config/makefile.compiler.in
+include config/makefile.macro.in
+-include config/makefile.EigenG-Batched.in
 
 # dir
 SRC_DIR := src
@@ -39,7 +39,7 @@ $(OBJ_DIR)/%.cu.o: %.cu
 
 -include $(DEPENDS)
 
--include makefile.test.in
+-include config/makefile.test.in
 
 clean:
 	@rm -fv $(TARGET)
@@ -48,12 +48,18 @@ clean:
 resultclean:
 	@find io -name '*.dat' | xargs rm -f
 	@find io -name '*.png' | xargs rm -f
+	@find io -name '*.pdf' | xargs rm -f
+	@find io -name '*.csv' | xargs rm -f
 	@find io -name '*.h5'  | xargs rm -f
+	@find io -type d -empty -delete
 
 resultcleanv:
 	@find io -name '*.dat' | xargs rm -fv
 	@find io -name '*.png' | xargs rm -fv
+	@find io -name '*.pdf' | xargs rm -fv
+	@find io -name '*.csv' | xargs rm -f
 	@find io -name '*.h5'  | xargs rm -fv
+	@find io -type d -empty -delete
 
 tagfiles: # universal ctags
 	ctags -R --langmap=c:+.hpp --langmap=c:+.cu $(SRC_DIR)

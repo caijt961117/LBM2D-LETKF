@@ -5,41 +5,43 @@
 
 #include "config.h"
 #include "data.h"
+#ifdef DA_LETKF
 #include "util/letkf_solver.h"
+#endif
 #include "util/timer.hpp"
 #include "util/device_memory.hpp"
 
 class DataAssimilator {
-private:
-    #ifdef PORT_CUDA
-    using fp = util::cu_vector<real>;
+public:
+    #if defined(DOUBLE_PRECISION) || defined(LETKF_DOUBLE_PRECISION)
+    using letkf_real = double;
     #else
-    using fp = std::vector<real>;
+    using letkf_real = float;
     #endif
-    fp obse; // I/O buffer of observation
-
-    util::letkf_solver solver;
-    util::device_memory<real> xk, yk; // LETKF buffer: k-th column of X, Y
-    std::vector<real> xk_host; // LETKF buffer for MPI (overlapped)
+private:
+    util::device_memory<real> uo, vo, ro; // observation
+    std::vector<real> uo_host, vo_host, ro_host; // observation buffer for MPI (overlapped)
+    #ifdef DA_LETKF
+    util::letkf_solver<letkf_real> solver;
+    util::device_memory<letkf_real> xk, yk; // LETKF buffer: k-th column of X, Y
+    util::device_memory<letkf_real> xk_host; // LETKF buffer for MPI (overlapped)
+    #endif
     util::timer timer;
 public:
-    DataAssimilator(const util::mpi& mpi) { init(mpi); }
+    explicit DataAssimilator(const util::mpi& mpi) { init(mpi); }
 
 private:
     void init(const util::mpi& mpi) {
-        #ifdef DA_OBS_UV
-        obse.resize(config::nx * config::ny * 2); // observe u, v
-        #else
-        obse.resize(config::nx * config::ny * config::Q); // observe f
-        #endif
-
         #ifdef DA_LETKF
         init_letkf(mpi);
+        #elif defined(DA_NUDGING)
+        init_nudging();
         #endif
     }
 
-public:
-    void init_letkf(const util::mpi& mpi); // public for cuda_device_lambda
+public: // private member function but public due to workaround of cuda_device_lambda
+    void init_letkf(const util::mpi& mpi);
+    void init_nudging();
 
 public:
     void assimilate_nudging_lbm(data& dat, const int t);
@@ -47,7 +49,7 @@ public:
     void assimilate_letkf_lbm(data& dat, const util::mpi& mpi, const int t);
     void assimilate_letkf_uv(data& dat, const util::mpi& mpi, const int t);
 
-public: 
+public:
     // wrapper of assimilate_*()
     void assimilate(data& dat, const util::mpi& mpi, const int t) {
         #ifdef DA_LETKF
@@ -56,7 +58,7 @@ public:
             #else
             assimilate_letkf_lbm(dat, mpi, t);
             #endif
-        #else
+        #elif defined(DA_NUDGING)
             #if defined(DA_OBS_UV) || defined(DA_OBS_RUV)
             assimilate_nudging_uv(dat, t);
             #else
@@ -67,10 +69,16 @@ public:
 
     // getter
     const auto& get_timer() const { return timer; }
+    #ifdef DA_LETKF
     const auto& get_letkf_timer() const { return solver.get_timer(); }
-    void clear_all_timer() { timer.clear(); solver.clear_timer(); }
+    #endif
+    void clear_all_timer() {
+        timer.clear();
+        #ifdef DA_LETKF
+        solver.clear_timer();
+        #endif
+    }
 
 };
 
 #endif
-

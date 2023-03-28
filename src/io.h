@@ -7,4 +7,3 @@
 void output(const data& dat, util::mpi mpi, int t);
 
 #endif
-

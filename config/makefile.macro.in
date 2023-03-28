@@ -1,0 +1,65 @@
+## makefile.macro.in
+## macro variables for numerical configuration
+
+# floating point
+ifeq ("$(DOUBLE_PRECISION)","1")
+CXXFLAGS += -D DOUBLE_PRECISION
+endif
+ifeq ("$(LETKF_DOUBLE_PRECISION)","1")
+CXXFLAGS += -D LETKF_DOUBLE_PRECISION
+endif
+
+# switch test base; TEST <-- {NATURE, OBSERVE, LYAPNOV, DA_NUDGING, DA_LETKF, DA_DUMMY}
+ifneq ("$(TEST)","")
+CXXFLAGS += -D $(TEST)
+endif
+
+## lyapnov test
+ifneq ("$(LY_EPSILON)","")
+CXXFLAGS += -D LYAPNOV -D LY_EPSILON=$(LY_EPSILON)
+endif
+
+## DA test
+ifneq ("$(DAPRUNE)","")
+CXXFLAGS += -D DAPRUNE=$(DAPRUNE)
+endif
+
+ifneq ("$(DA_XYPRUNE)","")
+CXXFLAGS += -D DA_XYPRUNE=$(DA_XYPRUNE)
+endif
+
+ifneq ("$(DA_QUADRA)","")
+CXXFLAGS += -D DA_QUADRA=$(DA_QUADRA)
+endif
+
+ifneq ("$(LETKF_COVINF)","")
+CXXFLAGS += -D LETKF_COVINF=$(LETKF_COVINF)
+endif
+
+## obserr sensivity test
+ifneq ("$(OBS_ERROR_RHO)","")
+CXXFLAGS += -D OBS_ERROR_RHO=$(OBS_ERROR_RHO)
+CXXFLAGS += -D OBS_ERROR_U=$(OBS_ERROR_U)
+endif
+
+## variable localization len
+ifneq ("$(LETKF_RLOC_LEN)","")
+CXXFLAGS += -D LETKF_RLOC_LEN=$(LETKF_RLOC_LEN)
+endif
+
+ifneq ("$(DA_XYPRUNE)","")
+CXXFLAGS += -D DA_XYPRUNE=$(DA_XYPRUNE)
+endif
+
+ifneq ("$(DA_QUADRA)","")
+CXXFLAGS += -D DA_QUADRA=$(DA_QUADRA)
+endif
+
+ifneq ("$(LETKF_COVINF)","")
+CXXFLAGS += -D LETKF_COVINF=$(LETKF_COVINF)
+endif
+
+## other options
+ifneq ("$(IOPRUNE)","")
+CXXFLAGS += -D IOPRUNE=$(IOPRUNE)
+endif

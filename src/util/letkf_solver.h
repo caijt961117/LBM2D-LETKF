@@ -1,5 +1,5 @@
-#ifndef LETKF_SOLVER_H_
-#define LETKF_SOLVER_H_
+#ifndef UTIL_LETKF_SOLVER_H_
+#define UTIL_LETKF_SOLVER_H_
 
 // local ensemble transform Kalman filter
 // formulation by [Y. Zeng et al., RMetS, 2016]
@@ -12,6 +12,7 @@
 #include "cu_matrix_eigensolver_wrapper.hpp"
 #include "invoker.hpp"
 #include "port.hpp"
+#include "mpi_wrapper.hpp"
 #include "mpi_safe_call.hpp"
 #include "range.hpp"
 #include "timer.hpp"
@@ -20,15 +21,18 @@
 
 namespace util {
 
+template<typename T>
 class letkf_solver {
 public:
-    using matrix_t = util::cu_matrix::matrix;
-    using vector_t = util::cu_matrix::vector;
+    using real = T; // float or double
+    using matrix_t = util::cu_matrix::matrix_x<real>;
+    using vector_t = util::cu_matrix::vector_x<real>;
 
 private:
+    const MPI_Datatype MPI_REAL_ = util::mpi::MPItypename<real>::name();
     // libs
-    util::cu_matrix::cublas_wrapper cublas;
-    util::cu_matrix::eigensolver_wrapper eigensolver;
+    util::cu_matrix::cublas_wrapper<real> cublas;
+    util::cu_matrix::eigensolver_wrapper<real> eigensolver;
     util::timer timer;
     std::vector<MPI_Request> mpi_requests_xk, mpi_requests_yk;
 
@@ -37,9 +41,9 @@ private:
 
     // input matrix / vector
     matrix_t X;   // [n_stt, n_ens] ensemble of cal
-    std::vector<float> X_host;
+    std::vector<real> X_host;
     matrix_t Y;   // [n_obs, n_ens] Y = H(X);
-    vector_t yo;  // [n_obs] observations 
+    vector_t yo;  // [n_obs] observations
 
     // temporary variables for ensemble statistics
     vector_t xbar; // [n_stt] emsemble mean of X
@@ -49,7 +53,7 @@ private:
     vector_t dyo;  // [n_obs] yo - ybar
 
     // hyper paramter
-    float beta;    // covariance inflation factor
+    real beta;    // covariance inflation factor
     matrix_t rR;  // [n_obs, n_obs] (rho o R)^-1
 
     // eigen of letkf
@@ -67,7 +71,7 @@ private:
     vector_t w;   // [n_ens] ensemble mean
     matrix_t W;   // [n_ens, n_ens] ensemble perturbation
 
-    // solution in float space
+    // solution in model space
     matrix_t Xsol;   // [n_stt, n_ens]
 
 public:
@@ -109,9 +113,9 @@ public:
                 + tmp_ee.size() + tmp_oe.size() + tmp_o.size() + tmp_e.size()
                 + P.size() + w.size() + W.size()
                 + Xsol.size();
-        double b_total = n_total * sizeof(float) / 1024. / 1024. / 1024.;
+        double b_total = n_total * sizeof(real) / 1024. / 1024. / 1024.;
         std::cout << "letkf_solver info:" << std::endl
-            << " typeof: float32" << std::endl
+            << " typeof: fp" << sizeof(real)*8 << std::endl
             << " size of ensemble: " << n_ens << std::endl
             << " size of state vector: " << n_stt << std::endl
             << " size of observation vector: " << n_obs << std::endl
@@ -132,8 +136,8 @@ public:
         /// reorder [ens, batch, stt] --> [batch, ens, stt]
         const size_t n_batch = this->n_batch;
         const size_t n_ens = this->n_ens;
-        const float* X_ebs = src.ptr();
-        float* X_bes = dst.ptr();
+        const real* X_ebs = src.ptr();
+        real* X_bes = dst.ptr();
         const size_t n_stt = this->n_stt;
         util::port::pfor3d<util::port::cuda>(
             util::port::thread3d(n_stt, n_ens, n_batch),
@@ -143,24 +147,24 @@ public:
             }
         );
     }
-    void mpi_allgather_xk(MPI_Comm comm, const float* xk) {
+    void mpi_allgather_xk(MPI_Comm comm, const real* xk) {
         const size_t size = n_stt*n_batch;
-        MPI_SAFE_CALL(MPI_Allgather(xk, size, MPI_FLOAT, 
-                    dX.ptr(), size, MPI_FLOAT, comm));
+        MPI_SAFE_CALL(MPI_Allgather(xk, size, MPI_REAL_,
+                    dX.ptr(), size, MPI_REAL_, comm));
         reorder_xk(dX, X);
     }
 
     /// collect xk; int case distibuted batch
-    void mpi_ialltoall_xk(MPI_Comm comm, MPI_Request* req, const float* xk) {
+    void mpi_ialltoall_xk(MPI_Comm comm, MPI_Request* req, const real* xk) {
         const size_t size = n_stt * n_batch;
-        MPI_Ialltoall(xk, size, MPI_FLOAT, dX.ptr(), size, MPI_FLOAT, comm, req);
+        MPI_Ialltoall(xk, size, MPI_REAL_, dX.ptr(), size, MPI_REAL_, comm, req);
     }
-    void mpi_ialltoall_xk_host(MPI_Comm comm, MPI_Request* req, const float* xk) {
+    void mpi_ialltoall_xk_host(MPI_Comm comm, MPI_Request* req, const real* xk) {
         const size_t size = n_stt * n_batch;
-        MPI_Ialltoall(xk, size, MPI_FLOAT, X_host.data(), size, MPI_FLOAT, comm, req);
+        MPI_Ialltoall(xk, size, MPI_REAL_, X_host.data(), size, MPI_REAL_, comm, req);
     }
     void copy_xk_host_to_device() {
-        CUDA_SAFE_CALL(cudaMemcpy(dX.ptr(), X_host.data(), dX.size()*sizeof(float), cudaMemcpyHostToDevice));
+        CUDA_SAFE_CALL(cudaMemcpy(dX.ptr(), X_host.data(), dX.size()*sizeof(real), cudaMemcpyHostToDevice));
     }
     void reorder_xk_after_ialltoall() {
         reorder_xk(dX, X);
@@ -180,8 +184,8 @@ public:
         const size_t n_batch = this->n_batch;
         const size_t n_ens = this->n_ens;
         const size_t n_obs = this->n_obs;
-        const float* Y_ebs = src.ptr();
-        float* Y_bes = dst.ptr();
+        const real* Y_ebs = src.ptr();
+        real* Y_bes = dst.ptr();
         util::port::pfor3d<util::port::cuda>(
             util::port::thread3d(n_obs, n_ens, n_batch),
             [=] __device__ __host__ (util::port::thread3d, int i_obs, int i_ens, int i_batch) {
@@ -190,21 +194,21 @@ public:
             }
         );
     }
-    void mpi_allgather_yk(MPI_Comm comm, const float* yk) {
+    void mpi_allgather_yk(MPI_Comm comm, const real* yk) {
         const size_t size = n_obs*n_batch;
-        MPI_SAFE_CALL(MPI_Allgather(yk, size, MPI_FLOAT, 
-                    dY.ptr(), size, MPI_FLOAT, comm));
+        MPI_SAFE_CALL(MPI_Allgather(yk, size, MPI_REAL_,
+                    dY.ptr(), size, MPI_REAL_, comm));
         reorder_yk(dY, Y);
     }
 
     /// collect yk; in case distributed batch
-    void mpi_alltoall_yk(MPI_Comm comm, const float* yk) {
+    void mpi_alltoall_yk(MPI_Comm comm, const real* yk) {
         const size_t size = n_obs * n_batch;
-        MPI_Alltoall(yk, size, MPI_FLOAT, dY.ptr(), size, MPI_FLOAT, comm);
+        MPI_Alltoall(yk, size, MPI_REAL_, dY.ptr(), size, MPI_REAL_, comm);
     }
-    void mpi_ialltoall_yk(MPI_Comm comm, MPI_Request* req, const float* yk) {
+    void mpi_ialltoall_yk(MPI_Comm comm, MPI_Request* req, const real* yk) {
         const size_t size = n_obs * n_batch;
-        MPI_Ialltoall(yk, size, MPI_FLOAT, dY.ptr(), size, MPI_FLOAT, comm, req);
+        MPI_Ialltoall(yk, size, MPI_REAL_, dY.ptr(), size, MPI_REAL_, comm, req);
     }
     void reorder_yk_after_ialltoall() {
         reorder_yk(dY, Y);
@@ -224,18 +228,12 @@ public:
         CUCHECK();
         CUDA_SAFE_CALL(cudaDeviceSynchronize());
     }
-    void set_rR_scalar(float scale) { rR.set_identity(scale); }
+    void set_rR_scalar(real scale) { rR.set_identity(scale); }
 
-    void set_covariance_inflation(float scale) { beta = scale; }
+    void set_covariance_inflation(real scale) { beta = scale; }
 
     void solve_evd(int verbose=0, std::string save_prefix="", int t=0) {
         timer.start("BLAS-like");
-        // save packed arrays
-        if(save_prefix.size() > 0) {
-            timer.transit("savemat");
-            Y.save(save_prefix, "_Y", t);
-            timer.transit("BLAS-like");
-        }
 
         // prepare ybar, dY, innovation
         Y.export_column_mean(ybar);
@@ -243,65 +241,74 @@ public:
         dY.columnwise_add(ybar, -1);
         cublas.copy(yo, dyo);
         cublas.axpy(-1, ybar, dyo);
+        if(save_prefix.size() > 0) {
+            timer.transit("savemat");
+            dY.save(save_prefix, "_dYf", t);
+            dyo.save(save_prefix, "_dyo", t);
+            timer.transit("BLAS-like");
+        }
 
         // Q := (Ne-1)I/beta + dYT * rR * dY
         Q.set_identity((n_ens-1)/beta);
         cublas.gemm(tmp_oe, rR, dY);
         cublas.gemm(Q, dY, tmp_oe, CUBLAS_OP_T, CUBLAS_OP_N, 1, 1);
+        if(save_prefix.size() > 0) {
+            timer.transit("savemat");
+            Q.save(save_prefix, "_Q", t);
+            timer.transit("BLAS-like");
+        }
 
         // Q =: V * diag(d) * V^T
         cublas.copy(Q, V);
         timer.transit("EVD");
         eigensolver.solve(V, d);
-        if(save_prefix.size() > 0) { 
+        if(save_prefix.size() > 0) {
             timer.transit("savemat");
-            Q.save(save_prefix, "_Q", t);
-            V.save(save_prefix, "_Qsol", t);
+            V.save(save_prefix, "_V", t);
             timer.transit("BLAS-like");
         }
+
         timer.stop_and_ignore_latter();
     }
 
     void solve_xa(int verbose=0, std::string save_prefix="", int t=0) {
         timer.start("BLAS-like");
 
-        // save packed arrays
-        if(save_prefix.size() > 0) {
-            timer.transit("savemat");
-            X.save(save_prefix, "_X", t);
-            timer.transit("BLAS-like");
-        }
         // prepare xbar, dX
         X.export_column_mean(xbar);
         cublas.copy(X, dX);
         dX.columnwise_add(xbar, -1);
+        if(save_prefix.size() > 0) {
+            timer.transit("savemat");
+            X.save(save_prefix, "_Xf", t);
+            dX.save(save_prefix, "_dXf", t);
+            timer.transit("BLAS-like");
+        }
 
         // P := V * D^-1 * VT
         D.set_diag(d, 1, -1);
         cublas.gemm(tmp_ee, D, V, CUBLAS_OP_N, CUBLAS_OP_T);
         cublas.gemm(P, V, tmp_ee);
+        if(save_prefix.size() > 0) {
+            timer.transit("savemat");
+            P.save(save_prefix, "_Pa", t);
+            timer.transit("BLAS-like");
+        }
 
         // w := P * dYT * rR * dyo
         cublas.gemv(tmp_o, rR, dyo);
         cublas.gemv(tmp_e, dY, tmp_o, CUBLAS_OP_T);
         cublas.gemv(w, P, tmp_e);
 
-        if(save_prefix.size() > 0) { 
-            timer.transit("savemat");
-            P.save(save_prefix, "_Pa", t);
-            w.save(save_prefix, "_wa", t);
-            rR.save(save_prefix, "_rR", t);
-            dY.save(save_prefix, "_dY", t);
-            dyo.save(save_prefix, "_dyo", t);
-            yo.save(save_prefix, "_yo", t);
-            W.save(save_prefix, "_dW", t);
-            timer.transit("BLAS-like");
-        }
-
         // W := sqrt(Ne - 1) * sqrtm(P)
         D.set_diag(d, 1, -0.5);
         cublas.gemm(tmp_ee, D, V, CUBLAS_OP_N, CUBLAS_OP_T);
         cublas.gemm(W, V, tmp_ee, CUBLAS_OP_N, CUBLAS_OP_N, sqrt(n_ens-1));
+        if(save_prefix.size() > 0) {
+            timer.transit("savemat");
+            W.save(save_prefix, "_dWa", t);
+            timer.transit("BLAS-like");
+        }
 
         // Xsol = xbar*1.T + dX*(wbar*1.T + dW)
         W.columnwise_add(w);
@@ -311,15 +318,33 @@ public:
         if(save_prefix.size() > 0) {
             timer.transit("savemat");
 
-            // Xsol = ...
-            Xsol.save(save_prefix, "_Xsol", t);
+            // primitives
+            Xsol.save(save_prefix, "_Xa", t);
+            W.save(save_prefix, "_Wa", t);
+
+            // AI := Xa - Xf
+            cublas.copy(Xsol, dX);
+            tmp_ee.set_identity();
+            cublas.gemm(dX, X, tmp_ee, CUBLAS_OP_N, CUBLAS_OP_N, -1, 1);
+            dX.save(save_prefix, "_AI", t);
 
             // Z := W - I
-            D.set_identity();
-            cublas.gemm(W, D, D, CUBLAS_OP_N, CUBLAS_OP_N, -1, 1);
+            tmp_ee.set_identity();
+            cublas.gemm(W, tmp_ee, tmp_ee, CUBLAS_OP_N, CUBLAS_OP_N, -1, 1);
             W.save(save_prefix, "_Z", t);
+
+            // Lambda := diag(eig_values)
+            tmp_ee.set_diag(d);
+            tmp_ee.save(save_prefix, "_Lambda", t);
+
+            // Wma := wa * 1.T
+            tmp_ee.set_ones(0);
+            tmp_ee.columnwise_add(w);
+            tmp_ee.save(save_prefix, "_Wma", t);
+
             timer.transit("BLAS-like");
         }
+
         timer.stop_and_ignore_latter();
     }
 
@@ -350,8 +375,8 @@ public:
         /// reorder [batch, ens, stt] --> [ens, batch, stt]
         const size_t n_batch = this->n_batch;
         const size_t n_ens = this->n_ens;
-        const float* X_bes = src.ptr();
-        float* X_ebs = dst.ptr();
+        const real* X_bes = src.ptr();
+        real* X_ebs = dst.ptr();
         const size_t n_stt = this->n_stt;
         util::port::pfor3d<util::port::cuda>(
             util::port::thread3d(n_stt, n_ens, n_batch),
@@ -364,8 +389,8 @@ public:
     void mpi_alltoall_Xsol(MPI_Comm comm) {
         reorder_Xsol(Xsol, X);
         const size_t size = n_stt * n_batch;
-        MPI_SAFE_CALL(MPI_Alltoall(X.ptr(), size, MPI_FLOAT,
-                    Xsol.ptr(), size, MPI_FLOAT, comm));
+        MPI_SAFE_CALL(MPI_Alltoall(X.ptr(), size, MPI_REAL_,
+                    Xsol.ptr(), size, MPI_REAL_, comm));
     }
 
 public:
@@ -376,4 +401,4 @@ public:
 
 } // namespace
 
-#endif
+#endif // UTIL_LETKF_SOLVER_H_

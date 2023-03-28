@@ -1,3 +1,5 @@
+#ifdef DA_NUDGING
+
 #include <cstdlib>
 #include <iostream>
 #include <fstream>
@@ -6,6 +8,7 @@
 #include "lbm.h"
 #include "data.h"
 #include "config.h"
+#include "util/stringutils.hpp"
 #include "util/port.hpp"
 #include "util/mpi_safe_call.hpp"
 
@@ -24,6 +27,16 @@ static constexpr bool skip_east = (config::da_quadra % 2 == 1);
 static constexpr bool skip_north = (config::da_quadra >= 2);
 static constexpr real alpha = config::da_nud_rate;
 
+void DataAssimilator::init_nudging() {
+    constexpr int nxy = config::nx * config::ny;
+    uo.reallocate(nxy);
+    vo.reallocate(nxy);
+    ro.reallocate(nxy);
+    uo_host.resize(nxy);
+    vo_host.resize(nxy);
+    ro_host.resize(nxy);
+}
+
 void DataAssimilator::assimilate_nudging_uv(data& dat, const int t) {
     if(config::verbose >= 1)  { std::cout << __PRETTY_FUNCTION__ << ": t=" << t << std::endl; }
     auto step = t / config::iiter;
@@ -31,26 +44,34 @@ void DataAssimilator::assimilate_nudging_uv(data& dat, const int t) {
 
     auto* f = dat.d().f.data();
     auto* rho = dat.d().r.data();
-    auto* du = this->obse.data();
-    auto* dv = this->obse.data() + config::nx * config::ny;
-    auto* dr = this->obse.data() + config::nx * config::ny * 2;
-
+    auto* du_host = this->uo_host.data();
+    auto* dv_host = this->vo_host.data();
+    auto* dr_host = this->ro_host.data();
+    auto* du = this->uo.ptr();
+    auto* dv = this->vo.ptr();
+    auto* dr = this->ro.ptr();
 
     { /// load observation u
-        auto fname = "io/observed/0/u_" + std::to_string(step) + ".dat";
+        auto fname = "io/observed/ens0000/u_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
-        file.read(reinterpret_cast<char*>(du), sizeof(real) * config::nx * config::ny);
+        runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
+        file.read(reinterpret_cast<char*>(du_host), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(du, du_host, sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
     }
     { /// load observation v
-        auto fname = "io/observed/0/v_" + std::to_string(step) + ".dat";
+        auto fname = "io/observed/ens0000/v_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
-        file.read(reinterpret_cast<char*>(dv), sizeof(real) * config::nx * config::ny);
+        runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
+        file.read(reinterpret_cast<char*>(dv_host), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(dv, dv_host, sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
     }
     { /// load observation rho
         #ifdef DA_OBS_RUV
-        auto fname = "io/observed/0/rho_" + std::to_string(step) + ".dat";
+        auto fname = "io/observed/ens0000/rho_step" + util::to_string_aligned(step, 10) + ".dat";
         auto file = std::ifstream(fname, std::ios::binary);
-        file.read(reinterpret_cast<char*>(dr), sizeof(real) * config::nx * config::ny);
+        runtime_assert(file.is_open(), "IOError: could not open file: " + fname);
+        file.read(reinterpret_cast<char*>(dr_host), sizeof(real) * config::nx * config::ny);
+        CUDA_SAFE_CALL(cudaMemcpy(dr, dr_host, sizeof(real) * config::nx * config::ny, cudaMemcpyHostToDevice));
         #endif
     }
 
@@ -59,7 +80,7 @@ void DataAssimilator::assimilate_nudging_uv(data& dat, const int t) {
         [=] __host__ __device__ (port::thread3d, int i, int j, int) {
             if(
              (da_w_itp or (i%xyprune==0 && j%xyprune==0))
-             && 
+             &&
              (!skip_east or i < config::nx/2)
              &&
              (!skip_north or j < config::ny/2)
@@ -120,6 +141,7 @@ void DataAssimilator::assimilate_nudging_uv(data& dat, const int t) {
 
 }
 
+#if 0
 void DataAssimilator::assimilate_nudging_lbm(data& dat, const int t) {
     if(config::verbose >= 1)  { std::cout << __PRETTY_FUNCTION__ << ": t=" << t << std::endl; }
     auto step = t / config::iiter;
@@ -144,7 +166,7 @@ void DataAssimilator::assimilate_nudging_lbm(data& dat, const int t) {
         [=] __host__ __device__ (port::thread3d, int i, int j, int) {
             if(
              (da_w_itp or (i%xyprune==0 && j%xyprune==0))
-             && 
+             &&
              (!skip_east or i < config::nx/2)
              &&
              (!skip_north or j < config::ny/2)
@@ -192,3 +214,6 @@ void DataAssimilator::assimilate_nudging_lbm(data& dat, const int t) {
     );
 
 }
+#endif
+
+#endif

@@ -25,7 +25,7 @@ void lbm_collision_mrt(real (&fc)[config::Q], real omega, real rho, real u, real
         {  0, -1,  0,  1,  0,  1,  0, -1,  0 }, // pxx
         {  1,  0, -1,  0,  0,  0, -1,  0,  1 }  // pxy
     };
-    static constexpr real mt[Qm] = { 
+    static constexpr real mt[Qm] = {
         1./9., 1./36., 1./36., 1./6., 1./12., 1./6., 1./12., 1./4., 1./4.
     }; /// where, M_inverse = diag(mt) . M_transpose
     //const real s[Qm] = { 0, 1.4, 1.4, 0, 1.2, 0, 1.2, omega, omega }; /// optim hyperviscousity

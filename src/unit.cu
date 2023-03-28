@@ -14,7 +14,7 @@ void unit_test_feq_relevant() {
     const real v = 0.03 * config::c;
 
     real f[config::Q];
-    
+
     for(int q=0; q<config::Q; q++) {
         f[q] = feq(rho, u, v, q);
     }
@@ -27,4 +27,3 @@ void unit_test_feq_relevant() {
     std::cout << "  v: " << v << ", " << vq << "; error = " << v-vq << std::endl;
     std::exit(0);
 }
-
