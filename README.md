@@ -152,9 +152,9 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
 
 ## Release version at each published article
 
-- [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/culb2d/releases/tag/v2.4.4)
+- [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v2.4.4)
 
-- `PRF2023 (submitted)`: [`v3.0.3`](https://github.com/hasegawa-yuta-jaea/culb2d/releases/tag/v3.0.3)
+- `PRF2023 (submitted)`: [`v3.0.3`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.4)
 
 ## Citation
 
