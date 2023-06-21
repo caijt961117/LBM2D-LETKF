@@ -154,7 +154,7 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
 
 - [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v2.4.4)
 
-- `PRF2023 (submitted)`: [`v3.0.3`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.4)
+- `JFM2023 (submitted)`: [`v3.0.5`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.5)
 
 ## Citation
 
@@ -169,9 +169,9 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
    pages={10-17},
    doi={10.1109/ScalAH56622.2022.00007}
  }
- @article{Hasegawa2023-PRF,
+ @article{Hasegawa2023-JFM,
     author={Hasegawa, Yuta and Onodera, Naoyuki and Asahi, Yuuichi and Ina, Takuya and Idomura, Yasuhiro and Imamura, Toshiyuki},
-    journal={submitted to Physical Review Fluids},
-    title={A minimal benchmark for continuous data assimilation of two-dimensional turbulence by using lattice Boltzmann method and local ensemble transform Kalman filter}
+    journal={submitted to Journal of Fluid Mechanics},
+    title={Data assimilation of two-dimensional turbulence based on ensemble Kalman filter with spatially sparse and noisy observation}
  }
 ```
