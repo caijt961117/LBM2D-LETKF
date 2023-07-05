@@ -2,15 +2,15 @@
 
 <img width=480 src=doc/header.png />
 
-`LBM2D-LETKF` is a microbenchmark code for ensemble data assimilation of turbulent flow using 2D lattice Boltzmann method (LBM) and local ensemble transform Kalman filter (LETKF).
-Computation is fully implemented in NVIDA GPU by using CUDA.
-Problem size of the test is typically 256 x 256 grid points with {4,16,64} ensembles, where the required number of GPUs is equal to the ensemble size (4, 16, or 64 GPUs).
+`LBM2D-LETKF` is a microbenchmark code for ensemble data assimilation of turbulent flow using the 2D lattice Boltzmann method (LBM) and local ensemble transform Kalman filter (LETKF).
+Computation is fully implemented in NVIDIA GPU by using CUDA.
+The problem size of the test is typically 256 x 256 grid points with {4,16,64} ensembles, where the required number of GPUs is equal to the ensemble size (4, 16, or 64 GPUs).
 
-This microbenchmark code has been develped to test the capability of ensemble data assimilation to `CityLBM`;
+This microbenchmark code has been developed to test the capability of ensemble data assimilation to `CityLBM`;
 `CityLBM` is an application for real-time high-resolution simulation of urban wind flow and plume dispersion. 
 See [our publication [Onodera2021]](https://doi.org/10.1007/s10546-020-00594-x) for detail.
 
-Differences between `CityLBM` and this benchmark are summarized as following:
+Differences between `CityLBM` and this benchmark are summarized as follows:
 
 | | `CityLBM` | `LBM2D-LETKF` |
 |:--|:--|:--|
@@ -19,15 +19,15 @@ Differences between `CityLBM` and this benchmark are summarized as following:
 | mesh type | locally refined mesh (AMR) | uniform mesh |
 | mesh size | > O(10^8) | O(10^4) |
 | numerical model for velocity | LBM<br>cumulant collision [[Geier2015]](https://doi.org/10.1016/j.camwa.2015.05.001)<br>CSM-LES [[Kobayashi2005]](https://doi.org/10.1063/1.1874212) | LBM<br>standard BGK collision<br>standard Smagorinsky model |
-| numerical model for temperature | Boussinesq approximation with finite difference discritization | *None* |
-| numerical model for plume dispersion | passible scalar with finite volume discritization | *None* |
+| numerical model for temperature | Boussinesq approximation with finite difference discretization | *None* |
+| numerical model for plume dispersion | passible scalar with finite volume discretization | *None* |
 | implement of LEKTF | *not yet* | yes |
 
-Besides, the LETKF is a well-known method of ensemble data assimilation with high performance computing in numerical weather prediction (NWP) community; for details, cf. e.g. [[Hunt2007]](https://doi.org/10.1016/j.physd.2006.11.008), [[Miyoshi2016]](https://doi.org/10.1002/2014GL060863), [[Yashiro2020]](https://doi.org/10.1109/SC41405.2020.00005).
+Besides, the LETKF is a well-known method of ensemble data assimilation with high-performance computing in numerical weather prediction (NWP) community; for details, cf. e.g. [[Hunt2007]](https://doi.org/10.1016/j.physd.2006.11.008), [[Miyoshi2016]](https://doi.org/10.1002/2014GL060863), [[Yashiro2020]](https://doi.org/10.1109/SC41405.2020.00005).
     
 ## Usage
 
-### Preperation
+### Preparation
 
 Firstly, the following external libraries are required:
 
@@ -37,8 +37,8 @@ Firstly, the following external libraries are required:
 - HDF5 (ver 1.8.2 or 1.12.0 may be available)
 - Boost C++
 
-**optional:** As eigenvalue decomposition solver for LETKF, while `cuSOLVER` is used as default, [`EigenG-Batched`](https://www.r-ccs.riken.jp/labs/lpnctrt/projects/eigengbatched/index.html), an open source code released from RIKEN, is also available.
-(Due to performance reason, `EigenG-Batched` is highly recommended for the larger ensemble size M>32)
+**Optional:** As eigenvalue decomposition solver for LETKF, while `cuSOLVER` is used as default, [`EigenG-Batched`](https://www.r-ccs.riken.jp/labs/lpnctrt/projects/eigengbatched/index.html), an open-source code released from RIKEN, is also available.
+(Due to a performance reason, `EigenG-Batched` is highly recommended for the larger ensemble size M>32)
 
 To use `EigenG-Batched`, execute
 ```
@@ -47,30 +47,32 @@ To use `EigenG-Batched`, execute
 
 ### Compile
 
-Select one of test modes from bolows:
+Select one of the test modes from below:
 
 | Test Mode | Description |
 | -- | -- |
-| `NATURE` | Compute a groundtruth |
+| `NATURE` | Compute a ground-truth |
 | `OBSERVE` | Create observation data from nature run |
-| `LYAPNOV` | Test lyapunov exponent of the system *(TBD)* |
+| `LYAPNOV` | Test Lyapunov exponent of the system *(TBD)* |
 | `DA_NUDGING` | Compute data assimilation experiment using nudging method *(TBD)* |
 | `DA_LETKF` | Compute data assimilation experiment using LETKF |
 | `DA_DUMMY` | *dummy* |
 
-For example, if you want to compute a groundtruth,
+For example, if you want to compute a ground-truth,
 ```bash
 make clean
 TEST=NATURE make
 ```
 After compilation is succeeded, the executable named `run/a.out` is generated.
 
+Or if you just want to test the compilation of every mode,
+
 ### Run
 
-#### (1) short validation test
+#### (1) Short validation test
 
 To check the validity of the data assimilation, one may test the Observing System Simulation Experiment (OSSE) of LBM2D-LETKF.
-The OSSE calculation is done by the following steps:
+The following steps do the OSSE calculation:
 
 1. Compute nature run and create observational data:
    ```
@@ -78,7 +80,7 @@ The OSSE calculation is done by the following steps:
    make TEST=OBSERVE
    mpiexec <mpiexec_options...> -np 1 run/a.out
    ```
-   \*\* note: `mpiexec_options` depend on environments. For details, please refer sample job scripts, [`run/wistimer`](run/wistimer) (for Wisteria-A) or [`run/jstimer`](run/jstimer) (for HPE SGI8600).
+   \*\* note: `mpiexec_options` depend on environments. For details, please refer to the example job scripts, [`run/wistimer`](run/wistimer) (for Wisteria-A) or [`run/jstimer`](run/jstimer) (for HPE SGI8600).
 2. Compute data assimilation:
    ```
    make clean
@@ -86,13 +88,13 @@ The OSSE calculation is done by the following steps:
    mpiexec <mpiexec_options...> -np <ensemble_size> run/a.out
    ```
    \*\* note: `ensemble_size` is, e.g. 4, 16, or 64
-3. Visualize the result; this will generate the snapshots of contour of vorticity field in nature run, observation, and LETKF:
+3. Visualize the result; this will generate the snapshots of the contour of the vorticity field in nature run, observation, and LETKF:
    ```
    ./postprocess/plot-vorticity.py io/*/ens*/
    ```
    
-After 3., you may find the snapshots named `io/*/0/vor_1990.png` (example is shown below).
-The result of the LETKF is expected to be similar to the Nature run; otherwise the validation test has been failed. 
+After 3., you may find the snapshots named `io/*/0/vor_1990.png` (an example is shown below).
+The result of the LETKF is expected to be similar to the Nature run; otherwise, the validation test has failed. 
 
 | Nature run | Observation | LETKF (expected) | Non-DA or invalid LETKF |
 |:--|:--|:--|:--|
@@ -100,7 +102,7 @@ The result of the LETKF is expected to be similar to the Nature run; otherwise t
 
 #### (2) performance evaluation
 
-*OUT OF DATE. Below result is with 128 x 128 mesh.*
+*OUT OF DATE. The below result is with 128 x 128 mesh.*
 
 The validation test also measures the performance, hence additional computation is not needed.
 You may find the performance result in `io/elapsed_time_rank*.csv` and `io/letkf_elapsed_time_rank*.csv`.
@@ -138,11 +140,11 @@ The result is, for instance,
   solve_comm_ovlp,0.809463
   update_xk,0.00277638
   ```
-  These tags are roughly categorized into following types:
+  These tags are roughly categorized into the following types:
   * Computation: `lbm2euler`, `set_yo`, `solve`, `solve_comm_ovlp`, `update_xk`
   * File read: `load_obs`
   * Communication: `mpi_xk`, `mpi_xsol`, `mpi_yk`.<br>
-    **Note:** communication is partially overlapped with computation and file read. The elapsed time shown here is of the non-overlapped part.
+    **Note:** Communication is partially overlapped with computation and file read. The elapsed time shown here is of the non-overlapped part.
   * Others:
     - `mpi_barrier`: waiting time to synchronize imbalance of computation.
     - `_ignored`: elapsed times outside the LETKF. Ignored.
@@ -154,7 +156,7 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
 
 - [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v2.4.4)
 
-- `JFM2023 (submitted)`: [`v3.0.5`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.5)
+- `202x (in preparation)`: [`v3.0.5`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.5)
 
 ## Citation
 
@@ -169,9 +171,9 @@ Besides, examples of performance evaluations at Wisteria-A can be found in [doc/
    pages={10-17},
    doi={10.1109/ScalAH56622.2022.00007}
  }
- @article{Hasegawa2023-JFM,
+ @article{Hasegawa202x,
     author={Hasegawa, Yuta and Onodera, Naoyuki and Asahi, Yuuichi and Ina, Takuya and Idomura, Yasuhiro and Imamura, Toshiyuki},
-    journal={submitted to Journal of Fluid Mechanics},
+    journal={in preparation},
     title={Data assimilation of two-dimensional turbulence based on ensemble Kalman filter with spatially sparse and noisy observation}
  }
 ```
