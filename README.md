@@ -65,7 +65,10 @@ TEST=NATURE make
 ```
 After compilation is succeeded, the executable named `run/a.out` is generated.
 
-Or if you just want to test the compilation of every mode,
+Or if you want to test the compilation of every mode, run
+```bash
+make test
+```
 
 ### Run
 
