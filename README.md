@@ -3,10 +3,10 @@
 <img width=480 src=doc/header.png />
 
 `LBM2D-LETKF` is a microbenchmark code for ensemble data assimilation of turbulent flow using the 2D lattice Boltzmann method (LBM) and local ensemble transform Kalman filter (LETKF).
-Computation is fully implemented in NVIDIA GPU by using CUDA.
+Computation is fully implemented in NVIDIA GPU by using CUDA, cuBLAS, cuSOLVER.
 The problem size of the test is typically 256 x 256 grid points with {4,16,64} ensembles, where the required number of GPUs is equal to the ensemble size (4, 16, or 64 GPUs).
 
-This microbenchmark code has been developed to test the capability of ensemble data assimilation to `CityLBM`;
+This microbenchmark code has been developed to test the capability of ensemble data assimilation to `CityLBM`.
 `CityLBM` is an application for real-time high-resolution simulation of urban wind flow and plume dispersion. 
 See [our publication [Onodera2021]](https://doi.org/10.1007/s10546-020-00594-x) for detail.
 
@@ -65,7 +65,7 @@ TEST=NATURE make
 ```
 After compilation is succeeded, the executable named `run/a.out` is generated.
 
-Or if you want to test the compilation of every mode, run
+Or if you want to check the compilation of every mode, run
 ```bash
 make test
 ```
@@ -154,29 +154,7 @@ The result is, for instance,
 
 Besides, examples of performance evaluations at Wisteria-A can be found in [doc/result_example/aquarius](doc/result_example/aquarius).
 
-
-## Release version at each published article
-
-- [`ScalAH22`](10.1109/ScalAH56622.2022.00007): [`v2.4.4`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v2.4.4)
-
-- `202x (in preparation)`: [`v3.0.5`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.5)
-
 ## Citation
 
-```bibtex
-@inproceedings{Hasegawa2022-ScalAH22,
-   author={Hasegawa, Yuta and Imamura, Toshiyuki and Ina, Takuya and Onodera, Naoyuki and Asahi, Yuuichi and Idomura, Yasuhiro},
-   booktitle={2022 IEEE/ACM Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems (ScalAH)}, 
-   title={GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter}, 
-   year={2022},
-   volume={},
-   number={},
-   pages={10-17},
-   doi={10.1109/ScalAH56622.2022.00007}
- }
- @article{Hasegawa202x,
-    author={Hasegawa, Yuta and Onodera, Naoyuki and Asahi, Yuuichi and Ina, Takuya and Idomura, Yasuhiro and Imamura, Toshiyuki},
-    journal={in preparation},
-    title={Data assimilation of two-dimensional turbulence based on ensemble Kalman filter with spatially sparse and noisy observation}
- }
-```
+1. Y. Hasegawa, T. Imamura, T. Ina, N. Onodera, Y. Asahi, and Y. Idomura, "GPU Optimization of Lattice Boltzmann Method with Local Ensemble Transform Kalman Filter," in *2022 IEEE/ACM Workshop on Latest Advances in Scalable Algorithms for Large-Scale Heterogeneous Systems (ScalAH)*, pp. 10-17, 2022. \[doi:[10.1109/ScalAH56622.2022.00007](https://doi.org/10.1109/ScalAH56622.2022.00007), arXiv:[2308.03310](https://arxiv.org/abs/2308.03310), Version of code: [`LBM2D-LETKF:v2.4.4`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v2.4.4)\]
+1. Y. Hasegawa, N. Onodera, Y. Asahi, T. Ina, T. Imamura, and Y. Idomura, "Continuous data assimilation of large eddy simulation by lattice Boltzmann method and local ensemble transform Kalman filter (LBM-LETKF)," *submitted*. \[arXiv:[2308.03972](https://arxiv.org/abs/2308.03972), Version of code: [`LBM2D-LETKF:v3.0.5`](https://github.com/hasegawa-yuta-jaea/LBM2D-LETKF/releases/tag/v3.0.5)\]
